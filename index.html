@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4D Geometry Hyper-Viewer</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: JetBrains Mono & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            hyper: {
+              cyan: '#00f0ff',
+              magenta: '#ff007f',
+              purple: '#7000ff',
+              emerald: '#00ff88',
+              amber: '#ffaa00',
+              glass: 'rgba(10, 15, 30, 0.65)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full w-full overflow-hidden select-none font-sans bg-slate-950 text-slate-100 flex flex-col">
+
+  <!-- Main Viewport Canvas -->
+  <div id="canvas-container" class="absolute inset-0 z-0 touch-none"></div>
+
+  <!-- HUD Top Bar -->
+  <header class="relative z-10 p-3 sm:p-4 flex justify-between items-center pointer-events-none w-full max-w-full">
+    <div class="glass-panel px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl flex items-center gap-2 sm:gap-3 pointer-events-auto border-l-4 border-l-hyper-cyan">
+      <i data-lucide="box" class="w-5 h-5 sm:w-6 sm:h-6 text-hyper-cyan animate-pulse"></i>
+      <div>
+        <h1 class="font-mono font-bold text-xs sm:text-base tracking-wider text-white flex items-center gap-1.5 sm:gap-2">
+          HYPER<span class="text-hyper-cyan">VISION</span> 4D
+          <span class="text-[9px] sm:text-[10px] px-1 py-0.5 sm:px-1.5 rounded bg-hyper-purple/40 text-hyper-cyan border border-hyper-purple/60">v2.5</span>
+        </h1>
+        <p class="text-[9px] sm:text-[11px] text-slate-400 font-mono hidden sm:block">4D Polytope Projection & Slice Engine</p>
+      </div>
+    </div>
+
+    <!-- Quick Stats Overlay (Desktop & Tablet) -->
+    <div class="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl hidden md:flex items-center gap-4 sm:gap-6 text-xs font-mono pointer-events-auto">
+      <div>
+        <span class="text-slate-400 block text-[9px] sm:text-[10px]">FPS</span>
+        <span id="fps-counter" class="text-hyper-emerald font-bold text-xs sm:text-sm">60</span>
+      </div>
+      <div class="w-px h-5 sm:h-6 bg-slate-700/60"></div>
+      <div>
+        <span class="text-slate-400 block text-[9px] sm:text-[10px]">VERTICES</span>
+        <span id="stat-vertices" class="text-hyper-cyan font-bold text-xs sm:text-sm">16</span>
+      </div>
+      <div class="w-px h-5 sm:h-6 bg-slate-700/60"></div>
+      <div>
+        <span class="text-slate-400 block text-[9px] sm:text-[10px]">EDGES</span>
+        <span id="stat-edges" class="text-hyper-cyan font-bold text-xs sm:text-sm">32</span>
+      </div>
+      <div class="w-px h-5 sm:h-6 bg-slate-700/60"></div>
+      <div>
+        <span class="text-slate-400 block text-[9px] sm:text-[10px]">PROJECTION</span>
+        <span id="stat-projection" class="text-hyper-magenta font-bold text-xs sm:text-sm">4D-PERSPECTIVE</span>
+      </div>
+    </div>
+
+    <!-- Mobile Panel Toggle Button -->
+    <button id="toggle-sidebar-btn" class="glass-panel p-2.5 sm:p-3 rounded-xl text-slate-200 hover:text-white pointer-events-auto lg:hidden active:scale-95 transition-transform flex items-center justify-center">
+      <i data-lucide="sliders" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+    </button>
+  </header>
+
+  <!-- Overlay Backcloth for Mobile Drawer -->
+  <div id="mobile-overlay" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-20 hidden lg:hidden pointer-events-auto transition-opacity"></div>
+
+  <!-- Main UI Container (Sidebar Panel) -->
+  <main class="relative z-20 lg:z-10 flex-1 flex justify-between p-2 sm:p-4 pointer-events-none overflow-hidden h-full">
+    <!-- Left Sidebar: Controls -->
+    <aside id="controls-sidebar" class="fixed lg:relative inset-y-0 left-0 z-30 lg:z-auto glass-panel w-11/12 max-w-xs sm:w-96 rounded-r-2xl lg:rounded-2xl p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 overflow-y-auto pointer-events-auto -translate-x-full lg:translate-x-0 transition-transform duration-300 max-h-full">
+      
+      <!-- Close Button for Mobile Drawer -->
+      <div class="flex lg:hidden justify-between items-center border-b border-slate-800 pb-2">
+        <span class="font-mono text-xs text-hyper-cyan font-bold flex items-center gap-1.5">
+          <i data-lucide="sliders" class="w-4 h-4"></i> CONTROLS & HYPER-PLANE
+        </span>
+        <button id="close-sidebar-btn" class="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-900/80">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Geometry Selection -->
+      <section class="space-y-1.5 sm:space-y-2">
+        <label class="text-xs font-mono font-semibold text-slate-300 tracking-wider flex items-center gap-2">
+          <i data-lucide="shapes" class="w-4 h-4 text-hyper-cyan"></i> 4D HYPER-GEOMETRY
+        </label>
+        <select id="polytope-select" class="w-full bg-slate-900/90 border border-slate-700/80 rounded-lg px-3 py-2 text-xs sm:text-sm font-mono text-hyper-cyan focus:outline-none focus:border-hyper-cyan transition-colors">
+          <option value="tesseract">Tesseract (8-Cell / Hypercube)</option>
+          <option value="cell5">5-Cell (Pentachoron)</option>
+          <option value="cell16">16-Cell (Hexadecachoron)</option>
+          <option value="cell24">24-Cell (Icositetrachoron)</option>
+          <option value="cell120">120-Cell (Hyperdodecahedron)</option>
+          <option value="cell600">600-Cell (Hypericosahedron Wire)</option>
+        </select>
+      </section>
+
+      <!-- Presets & Animation Controls -->
+      <section class="space-y-2 glass-card p-2.5 sm:p-3 rounded-xl">
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-mono font-semibold text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="play-circle" class="w-4 h-4 text-hyper-emerald"></i> ROTATION PRESETS
+          </span>
+          <button id="reset-rotation-btn" class="text-[10px] font-mono bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-slate-300 active:scale-95 transition">
+            RESET
+          </button>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
+          <button class="preset-btn bg-slate-800/80 hover:bg-hyper-purple/30 hover:border-hyper-purple border border-slate-700 text-[10px] sm:text-[11px] font-mono py-2 sm:py-1.5 rounded text-slate-200 active:scale-95 transition-all text-center" data-preset="hyper-spin">
+            Hyper-Spin
+          </button>
+          <button class="preset-btn bg-slate-800/80 hover:bg-hyper-purple/30 hover:border-hyper-purple border border-slate-700 text-[10px] sm:text-[11px] font-mono py-2 sm:py-1.5 rounded text-slate-200 active:scale-95 transition-all text-center" data-preset="flat-slice">
+            W-Slice
+          </button>
+          <button class="preset-btn bg-slate-800/80 hover:bg-hyper-purple/30 hover:border-hyper-purple border border-slate-700 text-[10px] sm:text-[11px] font-mono py-2 sm:py-1.5 rounded text-slate-200 active:scale-95 transition-all text-center" data-preset="chaos-orbit">
+            6D Chaos
+          </button>
+        </div>
+      </section>
+
+      <!-- 6D Planes Rotation Sliders -->
+      <section class="space-y-2 sm:space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-xs font-mono font-semibold text-slate-300 flex items-center gap-2">
+            <i data-lucide="rotate-3d" class="w-4 h-4 text-hyper-magenta"></i> 4D PLANE ROTATIONS
+          </label>
+          <button id="toggle-auto-rotate" class="text-[10px] sm:text-[11px] font-mono px-2.5 py-1 rounded-full bg-hyper-cyan/20 text-hyper-cyan border border-hyper-cyan/50 hover:bg-hyper-cyan/30 active:scale-95 transition">
+            PAUSE
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 sm:gap-3 text-xs font-mono">
+          <!-- XW Plane -->
+          <div class="bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+            <div class="flex justify-between text-[10px] sm:text-[11px] mb-1">
+              <span class="text-hyper-cyan font-bold">XW Plane</span>
+              <span id="val-xw" class="text-slate-400">0.005</span>
+            </div>
+            <input type="range" id="rot-xw" min="-0.03" max="0.03" step="0.001" value="0.005" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+          </div>
+          <!-- YW Plane -->
+          <div class="bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+            <div class="flex justify-between text-[10px] sm:text-[11px] mb-1">
+              <span class="text-hyper-magenta font-bold">YW Plane</span>
+              <span id="val-yw" class="text-slate-400">0.003</span>
+            </div>
+            <input type="range" id="rot-yw" min="-0.03" max="0.03" step="0.001" value="0.003" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+          </div>
+          <!-- ZW Plane -->
+          <div class="bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+            <div class="flex justify-between text-[10px] sm:text-[11px] mb-1">
+              <span class="text-hyper-emerald font-bold">ZW Plane</span>
+              <span id="val-zw" class="text-slate-400">0.000</span>
+            </div>
+            <input type="range" id="rot-zw" min="-0.03" max="0.03" step="0.001" value="0.000" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+          </div>
+          <!-- XY Plane -->
+          <div class="bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+            <div class="flex justify-between text-[10px] sm:text-[11px] mb-1">
+              <span class="text-slate-300">XY Plane</span>
+              <span id="val-xy" class="text-slate-400">0.002</span>
+            </div>
+            <input type="range" id="rot-xy" min="-0.03" max="0.03" step="0.001" value="0.002" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+          </div>
+          <!-- XZ Plane -->
+          <div class="bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+            <div class="flex justify-between text-[10px] sm:text-[11px] mb-1">
+              <span class="text-slate-300">XZ Plane</span>
+              <span id="val-xz" class="text-slate-400">0.000</span>
+            </div>
+            <input type="range" id="rot-xz" min="-0.03" max="0.03" step="0.001" value="0.000" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+          </div>
+          <!-- YZ Plane -->
+          <div class="bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+            <div class="flex justify-between text-[10px] sm:text-[11px] mb-1">
+              <span class="text-slate-300">YZ Plane</span>
+              <span id="val-yz" class="text-slate-400">0.000</span>
+            </div>
+            <input type="range" id="rot-yz" min="-0.03" max="0.03" step="0.001" value="0.000" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+          </div>
+        </div>
+      </section>
+
+      <!-- Projection & Slicing Mode Settings -->
+      <section class="space-y-2 sm:space-y-3">
+        <label class="text-xs font-mono font-semibold text-slate-300 flex items-center gap-2">
+          <i data-lucide="eye" class="w-4 h-4 text-hyper-amber"></i> PROJECTION & SLICING
+        </label>
+        
+        <!-- Projection Toggle -->
+        <div class="flex bg-slate-900/90 p-1 rounded-lg border border-slate-800 font-mono text-xs">
+          <button id="proj-perspective-btn" class="flex-1 py-1.5 rounded-md bg-hyper-cyan/20 text-hyper-cyan font-semibold transition-all">
+            Perspective
+          </button>
+          <button id="proj-ortho-btn" class="flex-1 py-1.5 rounded-md text-slate-400 hover:text-slate-200 transition-all">
+            Orthographic
+          </button>
+        </div>
+
+        <!-- Hyperplane Slice Toggle & Slider -->
+        <div class="glass-card p-2.5 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono text-slate-200 flex items-center gap-1.5">
+              <i data-lucide="scissors" class="w-3.5 h-3.5 text-hyper-magenta"></i> 3D Hyperplane Slice
+            </span>
+            <input type="checkbox" id="enable-slice-toggle" class="w-5 h-5 sm:w-4 sm:h-4 accent-hyper-magenta rounded cursor-pointer">
+          </div>
+          <div id="slice-controls" class="space-y-1 opacity-50 pointer-events-none transition-opacity">
+            <div class="flex justify-between text-[10px] font-mono">
+              <span class="text-slate-400">W-Slice Position</span>
+              <span id="val-slice-w" class="text-hyper-magenta">0.00</span>
+            </div>
+            <input type="range" id="slice-w-slider" min="-2.0" max="2.0" step="0.02" value="0.00" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+            <div class="flex justify-between text-[10px] font-mono">
+              <span class="text-slate-400">Slice Thickness</span>
+              <span id="val-slice-thick" class="text-slate-300">0.15</span>
+            </div>
+            <input type="range" id="slice-thick-slider" min="0.02" max="0.5" step="0.01" value="0.15" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+          </div>
+        </div>
+
+        <!-- 4D Focal Distance / W-Distance -->
+        <div class="space-y-1.5 font-mono text-xs">
+          <div class="flex justify-between text-[10px] sm:text-[11px]">
+            <span class="text-slate-300">4D Focal Distance (W-Dist)</span>
+            <span id="val-w-dist" class="text-hyper-cyan">2.50</span>
+          </div>
+          <input type="range" id="slider-w-dist" min="1.1" max="5.0" step="0.05" value="2.50" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+      </section>
+
+      <!-- Appearance & Colors -->
+      <section class="space-y-2 sm:space-y-3">
+        <label class="text-xs font-mono font-semibold text-slate-300 flex items-center gap-2">
+          <i data-lucide="palette" class="w-4 h-4 text-hyper-purple"></i> THEME & DISPLAY
+        </label>
+        
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div>
+            <span class="text-[10px] text-slate-400 block mb-1">Color Palette</span>
+            <select id="theme-select" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs">
+              <option value="cyberpunk">Cyberpunk Neon</option>
+              <option value="emerald">Hologram Emerald</option>
+              <option value="deepspace">Deep Space Blue</option>
+              <option value="infrared">Infrared Heatmap</option>
+              <option value="monochrome">Monochrome Grid</option>
+            </select>
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 block mb-1">Vertex Scale</span>
+            <input type="range" id="slider-vertex-size" min="0" max="0.12" step="0.005" value="0.04" class="w-full custom-range h-2 sm:h-1 bg-slate-700 rounded-lg cursor-pointer mt-2">
+          </div>
+        </div>
+      </section>
+
+      <!-- Current 4D Angles HUD -->
+      <section class="glass-card p-2.5 rounded-xl font-mono text-[9px] sm:text-[10px] space-y-1 text-slate-400">
+        <div class="text-slate-300 font-semibold mb-1 flex justify-between">
+          <span>CURRENT 4D ANGLES</span>
+          <span class="text-hyper-cyan">RAD</span>
+        </div>
+        <div class="grid grid-cols-3 gap-1">
+          <div>XW: <span id="angle-xw" class="text-white">0.00</span></div>
+          <div>YW: <span id="angle-yw" class="text-white">0.00</span></div>
+          <div>ZW: <span id="angle-zw" class="text-white">0.00</span></div>
+          <div>XY: <span id="angle-xy" class="text-white">0.00</span></div>
+          <div>XZ: <span id="angle-xz" class="text-white">0.00</span></div>
+          <div>YZ: <span id="angle-yz" class="text-white">0.00</span></div>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- Floating Canvas Helper HUD -->
+    <div class="hidden sm:flex flex-col gap-2 items-end pointer-events-auto self-end font-mono text-xs">
+      <div class="glass-panel px-3 py-2 rounded-xl text-slate-400 text-right space-y-1 border-r-2 border-r-hyper-cyan">
+        <div class="text-slate-200 font-semibold flex items-center gap-1.5 justify-end text-xs">
+          <i data-lucide="hand" class="w-3.5 h-3.5 text-hyper-cyan"></i> Touch & Gesture Controls
+        </div>
+        <p class="text-[10px]">1 Finger Touch Drag: Rotate 4D Hyperplane (XW / YW)</p>
+        <p class="text-[10px]">2 Finger Pinch: Zoom Camera</p>
+        <p class="text-[10px]">2 Finger Drag: Pan / Orbit View</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
